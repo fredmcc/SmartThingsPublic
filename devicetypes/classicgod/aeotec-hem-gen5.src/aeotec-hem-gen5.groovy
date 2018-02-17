@@ -68,7 +68,7 @@ metadata {
 			state "current", label:'${currentValue}\n A ', unit: "A"
 		}
 		standardTile("reset", "device.reset", decoration: "flat", width: 2, height: 2) {
-			state "default", label:'Reset kWh', action:"reset", icon: "st.Kids.kids4"
+			state "default", label:'Reset-kWh', action:"reset", icon: "st.Kids.kids4"
 		}
 		standardTile("refresh", "device.refresh", decoration: "flat", width: 2, height: 2) {
 			state "default", label:'', action:"refresh.refresh", icon:"st.secondary.refresh"
