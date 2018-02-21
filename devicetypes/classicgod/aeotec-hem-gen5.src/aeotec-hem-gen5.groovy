@@ -35,11 +35,11 @@ metadata {
 		fingerprint deviceId: "0X3101", inClusters:"0x5E,0x86,0x72,0x32,0x56,0x60,0x8E,0x70,0x59,0x85,0x7A,0x73,0x5A,0x98"
 		fingerprint deviceId: "0X3101", inClusters:"0x5E,0x86,0x72,0x32,0x56,0x60,0x8E,0x70,0x59,0x85,0x7A,0x73,0x5A"
 	}
-
+    
 	tiles (scale: 2) {
 		multiAttributeTile(name:"multiTile", type: "generic", width: 3, height: 4){
 			tileAttribute ("device.power", key: "PRIMARY_CONTROL") {
-				attributeState "power", label: '${currentValue} W', icon: null, backgroundColors:[
+				attributeState "power", label: '${currentValue}\n W', icon: null, backgroundColors:[
 					[value: 0, color: "#44b621"],
 					[value: 2000, color: "#f1d801"],
 					[value: 4000, color: "#d04e00"],
