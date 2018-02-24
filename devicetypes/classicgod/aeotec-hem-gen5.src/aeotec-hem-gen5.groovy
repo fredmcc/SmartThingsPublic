@@ -39,16 +39,23 @@ metadata {
 	tiles (scale: 2) {
 		multiAttributeTile(name:"multiTile", type: "generic", width: 3, height: 4){
 			tileAttribute ("device.power", key: "PRIMARY_CONTROL") {
-				attributeState "power", label: '${currentValue}\n W', icon: null, backgroundColors:[
+            attributeState "power", label: '${currentValue}\nW', icon: null, backgroundColors:[
+//				attributeState "power", label: ${device.currentValue("energy")}, icon: null, backgroundColors:[
 					[value: 0, color: "#44b621"],
 					[value: 2000, color: "#f1d801"],
 					[value: 4000, color: "#d04e00"],
 					[value: 6000, color: "#bc2323"]
 				]
 			}
-			tileAttribute("device.combinedMeter", key:"SECONDARY_CONTROL") {
-				attributeState("combinedMeter", label:'${currentValue}')
+			tileAttribute("device.kWhTotals", key:"SECONDARY_CONTROL") {
+				attributeState("kWhTotals", label:'${currentValue}')
 			} 
+//			tileAttribute("device.combinedMeter", key:"SECONDARY_CONTROL") {
+//				attributeState("combinedMeter", label:'${currentValue}')
+//			} 
+//			tileAttribute("device.lastUpdated", key:"SECONDARY_CONTROL") {
+//				attributeState("lastUpdated", label:'${currentValue}')
+//			} 
 		}
 		valueTile("power", "device.power", decoration: "flat", width: 2, height: 2, canChangeIcon: true) {
 			state "power", label:'${currentValue} W', unit: "W", icon: "st.Home.home2", backgroundColors:[
@@ -58,14 +65,17 @@ metadata {
 				[value: 6000, color: "#bc2323"]
 			]
 		}
-		valueTile("energy", "device.energy", decoration: "flat", width: 2, height: 2) {
-			state "energy", label:'${currentValue}\n kWh ', unit: "kWh"
+		valueTile("kWDisplay", "device.kWDisplay", decoration: "flat", width: 2, height: 2) {
+			state "default", label:'${currentValue}', unit: "?"
 		}
 		valueTile("voltage", "device.voltage", decoration: "flat", width: 2, height: 2) {
 			state "voltage", label:'${currentValue}\n V ', unit: "V"
 		}
 		valueTile("current", "device.current", decoration: "flat", width: 2, height: 2) {
 			state "current", label:'${currentValue}\n A ', unit: "A"
+		}
+		valueTile("energy", "device.energy", decoration: "flat", width: 2, height: 2) {
+			state "energy", label:'${currentValue}\n kWh ', unit: "kWh"
 		}
 		standardTile("reset", "device.reset", decoration: "flat", width: 2, height: 2) {
 			state "default", label:'Reset-kWh', action:"reset", icon: "st.Kids.kids4"
@@ -75,7 +85,7 @@ metadata {
 		}
 		
 		main "power"
-		details("multiTile","energy","voltage","current","reset","refresh")
+		details("multiTile","kWDisplay","voltage","current","energy","reset","refresh")
 	}
 		
 	preferences {
@@ -146,6 +156,14 @@ def reset() {
 }
 
 def resetMeter() {
+	def nowDay = new Date().format("dd MMM YYYY", location.timeZone)
+    def nowTime = new Date().format("h:mm a", location.timeZone)
+    def lastReset = nowDay + " " +nowTime
+	state.lastKWHReset = lastReset
+    
+    state.kWhResetLeftover = state.todaysKWh
+    state.yesterdaysLastKWh = 0
+
 	logging("${device.displayName} - executing resetMeter()","info")
 	def cmds = []
 	sendEvent(name: "combinedMeter", value: "RESETTING KWH!", displayed: false)
@@ -155,6 +173,7 @@ def resetMeter() {
 	cmds << [zwave.meterV3.meterGet(scale: 0),2]
 	cmds << [zwave.meterV3.meterGet(scale: 0),3]
 	if (cmds) { return encapSequence(cmds,1000) }
+
 }
 
 def childRefresh(dni) {
@@ -240,6 +259,8 @@ def updated() {
 	
 	state.lastUpdated = now()
 	if (cmds) { response(encapSequence(cmds,1000)) }
+    
+    state.lastKWhResetDay = new Date().format("dd", location.timeZone)
 }
 
 def Integer calcParamVal(String paramKey) {
@@ -298,6 +319,7 @@ def zwaveEvent(physicalgraph.zwave.commands.applicationstatusv1.ApplicationRejec
 def zwaveEvent(physicalgraph.zwave.commands.meterv3.MeterReport cmd, ep=null) {
 	String unit
 	String type
+
 	switch (cmd.scale+((cmd.scale2) ? 1:0)) {
 		case 0: type = "energy"; unit = "kWh"; break; 
 		case 1: type = "totalEnergy"; unit = "kVAh"; break;
@@ -307,6 +329,27 @@ def zwaveEvent(physicalgraph.zwave.commands.meterv3.MeterReport cmd, ep=null) {
 		case 7: type = "reactivePower"; unit = "kVar"; break;
 		case 8: type = "reactiveEnergy"; unit = "kVarh"; break; 
 	}
+
+   	//Date date = new Date()
+	//state.lastKWhResetDay = 3
+//Track daily usage
+	//state.yesterdaysLastKWh = 5.717
+    //state.kWhResetLeftover = 15.122
+    //state.yesterdaysKWh = 36.761
+    
+   	sendEvent(name: "kWDisplay", value: String.format("%5.2f",device.currentValue("power")/1000) + "\n kW", units: "kW", displayed: false)
+
+    if (type == "energy"){
+	    state.todaysKWh = device.currentValue("energy") - state.yesterdaysLastKWh + state.kWhResetLeftover
+		if(new Date().format("dd", location.timeZone) != state.lastKWhResetDay){
+            state.yesterdaysKWh = state.todaysKWh
+        	state.yesterdaysLastKWh = device.currentValue("energy")
+            state.kWhResetLeftover = 0
+            state.lastKWhResetDay = new Date().format("dd", location.timeZone) 
+        }
+	}
+    
+    
 	logging("${device.displayName} - MeterReport received, ep: ${((ep) ? ep:0)} value: ${cmd.scaledMeterValue} ${unit}", "info")
 	if (ep == null) {
 		sendEvent([name: type, value: cmd.scaledMeterValue, unit: unit, displayed: false])
@@ -317,8 +360,12 @@ def zwaveEvent(physicalgraph.zwave.commands.meterv3.MeterReport cmd, ep=null) {
 		getChild(ep)?.sendEvent([name: type, value: cmd.scaledMeterValue, unit: unit, displayed: false]) 
 		getChild(ep)?.sendEvent([name: "combinedMeter", value: "${getChild(ep)?.currentValue("voltage")} V | ${getChild(ep)?.currentValue("current")} A | ${getChild(ep)?.currentValue("energy")} kWh", displayed: false])
 	}
-}
+//sendEvent([name: "combinedMeter", value: "${device.currentValue("voltage")} V | ${device.currentValue("current")} A | ${device.currentValue("energy")} kWh \n$state.lastKWHReset", displayed: false])
+//sendEvent([name: "combinedMeter", value: "${device.currentValue("voltage")} V | ${device.currentValue("current")} A | ${device.currentValue("energy")} kWh LastReset:${state.lastKWHReset} \n ${state.lastKWhResetDay} Yesterday:${state.yesterdaysKWh}KWh Today:${state.todaysKWh}KWh", displayed: false])
+sendEvent([name: "combinedMeter", value: "LastReset:${state.lastKWHReset} \n ${state.lastKWhResetDay} Yesterday:${state.yesterdaysKWh}KWh Today:${state.todaysKWh}KWh", displayed: false])
+sendEvent([name: "kWhTotals", value: "Last kWh Reset:${state.lastKWHReset} \nYesterday:${state.yesterdaysKWh}kWh   Today:${state.todaysKWh}kWh (${state.lastKWhResetDay})", displayed: false])
 
+}
 /*
 ####################
 ## Z-Wave Toolkit ##
