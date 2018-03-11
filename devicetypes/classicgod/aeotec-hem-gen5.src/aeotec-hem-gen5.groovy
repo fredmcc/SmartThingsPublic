@@ -362,8 +362,19 @@ def zwaveEvent(physicalgraph.zwave.commands.meterv3.MeterReport cmd, ep=null) {
 	}
 //sendEvent([name: "combinedMeter", value: "${device.currentValue("voltage")} V | ${device.currentValue("current")} A | ${device.currentValue("energy")} kWh \n$state.lastKWHReset", displayed: false])
 //sendEvent([name: "combinedMeter", value: "${device.currentValue("voltage")} V | ${device.currentValue("current")} A | ${device.currentValue("energy")} kWh LastReset:${state.lastKWHReset} \n ${state.lastKWhResetDay} Yesterday:${state.yesterdaysKWh}KWh Today:${state.todaysKWh}KWh", displayed: false])
+    Calendar c = Calendar.getInstance(location.timeZone);
+    long now = c.getTimeInMillis();
+    c.set(Calendar.HOUR_OF_DAY, 0);
+    c.set(Calendar.MINUTE, 0);
+    c.set(Calendar.SECOND, 0);
+    c.set(Calendar.MILLISECOND, 0);
+    long passed = now - c.getTimeInMillis();
+	
+    float outlook = 24.0 * 60.0 * 60.0 * state.todaysKWh / (passed / 1000)
+
+
 sendEvent([name: "combinedMeter", value: "LastReset:${state.lastKWHReset} \n ${state.lastKWhResetDay} Yesterday:${state.yesterdaysKWh}KWh Today:${state.todaysKWh}KWh", displayed: false])
-sendEvent([name: "kWhTotals", value: "Last kWh Reset:${state.lastKWHReset} \nYesterday:${state.yesterdaysKWh}kWh   Today:${state.todaysKWh}kWh (${state.lastKWhResetDay})", displayed: false])
+sendEvent([name: "kWhTotals", value: "Last kWh Reset:${state.lastKWHReset} \nY:${state.yesterdaysKWh}kWh T:${state.todaysKWh}kWh (${outlook.round(1)}kWh)", displayed: false])
 
 }
 /*
